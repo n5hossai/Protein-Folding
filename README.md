@@ -22,6 +22,6 @@ The objective of my analysis is to create a model that determines the accuracy o
 - bbCA_bbO_vshor = -0.395812423 . With one unit increase in this variable *bbCA_bbO_vshor*, the response variable decreases by 0.395812423
 
 
-![plot of MSE vs Predictors](https://github.com/n5hossai/Protein-Folding/blob/main/RMSE%20vals.PNG)
+![plot of MSE vs Predictors](https://github.com/n5hossai/Protein-Folding/blob/main/mse%20vs%20preds.PNG)
 
 ![plot of RMSE values](https://github.com/n5hossai/Protein-Folding/blob/main/RMSE%20vals.PNG)
