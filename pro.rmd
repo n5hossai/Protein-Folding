@@ -1,0 +1,603 @@
+---
+title: "Protein Folding Problem"
+author: "Naymul Hossain"
+date: "December 11, 2020"
+output:
+  pdf_document: null
+  html_document:
+    df_print: paged
+spacing: single
+fontsize: 12 pt
+---
+```{r, echo=FALSE }
+#removing the aliases
+proFull <- read.csv("protein-train.csv")
+mFull <- lm(accuracy~., data=proFull)
+mCoef <- mFull$coefficients
+remAl <- which(is.na(mCoef))
+pro <- proFull[,-c(478,483)]
+```
+**Summary:** $\newline$
+The objective of my analysis is to create a model that determines the accuracy of a computer-generated protein structure, compared with a known benchmark structure. By getting rid of the initial multicollinearity by using VIF(Variance Inflation Factor), I developed 3 models with AIC(Akaike information criterion) (Forward, Backward and Forward-Backward) and 3 more models with BIC(Bayesian information criterion) (Forward, Backward and Forward-Backward) as the criterion. Though the dataset was not initially splitted to training and validation for model selection, I implemented $k=N$ cross-validation(C.V.) to try compensate for that. Following that, I compared the 6 models and chose the one with the the model 4 (BIC Forward after $k=N$ C.V.), since all the other RMSPE(Root Mean Square Prediction Error) were similar, and this one had the least difference in error compared to the validation set, I chose this with a RMSPE value of $0.5448438$. Following that, I came up with the Box-Cox Transformation stabilize the variance. My model 4 contains $89$ predictors, and also follows the MLR model assumptions.
+
+
+
+
+
+```{r, echo=FALSE}
+#finding the VIF Values
+library(faraway)
+m1 <- lm(accuracy ~ ., data = pro)
+```
+```{r, echo=FALSE, eval=TRUE}
+#removing VIF values >=10
+
+flag = TRUE
+mtmp <- m1
+library(faraway)
+while(flag){
+  vif_vals <- vif(mtmp)
+
+  if(max(vif_vals) >= 10){
+    maxVIF_index <- which.max(vif_vals)
+    rem_pred <- names(vif_vals)[maxVIF_index]
+    pro <- pro[,-which(names(pro) == rem_pred)]
+    mtmp <- lm(accuracy ~ ., data = pro)
+  }else{
+    flag=FALSE
+  }
+
+
+}
+m2 <- mtmp #new model with no VIF values >= 10
+save(m2, file = "m2.rda")
+```
+```{r, echo=FALSE}
+load("m2.rda")
+```
+$\newline$
+**Exploratory Analysis of Dataset:**$\newline$
+Initially I started off playing with the data by gathering some variables, and also angles, since it seemed unique compared to others. I found out that there is a trend for angles when the scatterplot is observed. The plot below shows some randomly picked variables and angles to understand the dataset.
+$\newline$
+What I found out was there were many variables which has no relation with accuracy(such as the $2^{nd}$ to $4^{th}$ scatterplots shown below.
+In particular, I found out that the variables *scArgN_bbC_ medshort* (column 478) and *scArgN_bbO_short* (column 483), formed exact multicollinearity. Therefore, even before I started getting rid of multicollinearity in the next section using VIF, I got rid of them from the dataset. If this was not done, I would not have been able to find the VIF, since $X^T X$ would *not* have existed
+
+
+```{r, echo= FALSE}
+par(mfrow=c(2,2))
+plot(pro$angles,pro$accuracy,  ylab="accuracy", xlab ="angles" )
+plot(pro$bbO_bbO_vlong,pro$accuracy, ylab="accuracy", xlab="bbO_bbO_vlong")
+plot(pro$carbonylC_bbProN_medlong,pro$accuracy,  ylab="accuracy", xlab="carbonylC_bbProN_medlong")
+plot(pro$carbonylC_hydroxylO_long,pro$accuracy,  ylab="accuracy", xlab="carbonylC_bbProN_medlong")
+
+mtext("Fig1: Scatterplots of Accuracy vs some random predictors to find a trend", side = 3, line = -27, outer = TRUE)
+```
+
+$\newline$
+**Methods:**$\newline$
+- *Getting rid of Multicollinearity*:$\newline$
+Firstly, getting rid of multicollinearity was important, so as to make sure we get rid of as many predictors, which does the same contribution in building our model. Therefore, any predictor with a value $\geq 10$ was removed. So, now we have $569$ variables to work with. Reducing the number of variables also contributed in lower computation time, and also helps in interpretability of our analysis.
+
+```{r,echo=FALSE}
+library(MASS)
+load("m2.rda")
+```
+
+```{r, echo=FALSE}
+# AIC forward model
+# full<- m2
+# empty<-lm(accuracy~1, data=pro)
+
+#mAICF <-stepAIC(object = empty, scope=list(upper=full, lower=empty), direction = "forward", trace = 0) 
+load("modAICF.rda")
+```
+
+```{r, echo=FALSE}
+#AIC backward model
+# full<- m2
+# empty<-lm(accuracy~1, data=pro)
+
+#mAICB <-stepAIC(object = full, scope=list(upper=full, lower=empty), direction = "backward", trace = 0)
+load("modAICB.rda")
+```
+
+```{r, echo=FALSE}
+#AIC forward-backward model
+# full<- m2
+# empty<-lm(accuracy~1, data=pro)
+
+#mAICFB<-stepAIC(object = empty, scope=list(upper=full, lower=empty), direction = "both", trace = 0) 
+
+#save(mAICFB, file = "modAICFB.rda")
+load("modAICFB.rda")
+```
+
+```{r, echo=FALSE}
+#BIC forward mdoel
+# full<- m2
+# empty<-lm(accuracy~1, data=pro)
+
+#mBICF<-stepAIC(object = empty, scope=list(upper=full, lower=empty), direction = "forward", trace = 0, k=log(nrow(pro))) 
+#save(mBICF, file = "modBICF.rda")
+load("modBICF.rda")
+```
+
+```{r, echo=FALSE}
+#BIC backward model
+# full<- m2
+# empty<-lm(accuracy~1, data=pro)
+
+#mBICB<-stepAIC(object = full, scope=list(upper=full, lower=empty), direction = "backward", trace = 0, k=log(nrow(pro)))
+#save(mBICB, file = "modBICB.rda")
+load("modBICB.rda")
+```
+
+```{r, echo=FALSE}
+#BIC forward-backward model
+# full<- m2
+# empty<-lm(accuracy~1, data=pro)
+
+#mBICFB<-stepAIC(object = empty, scope=list(upper=full, lower=empty), direction = "both", trace = 0, k=log(nrow(pro)))
+#save(mBICFB, file = "modBICFB.rda")
+load("modBICFB.rda")
+```
+
+We can understand with such high $R^2_{Adj}$ values that the models have a goodness of fit. However, that is not all, since now we will compare to check if the model assumptions are maintained.
+
+-*Model Selection Criteria* $\newline$
+Going through the cross validation of 6 models, where it required more than 10 hours for one in the generic way, I decided to select model without cross validation, with the promise of training my data using $k=N$ cross validation once my model is selected. Below the $R^2_{Adj}$ for all the six models are given (I tried using Kable but my Rstudio was crashing at the last minute. I tried updating according to piazza but it was too late to find a solution even after updating. Sorry for bad view):
+```{r, echo=FALSE}
+r2adj.models <-c(summary(mAICF)$adj.r.squared, summary(mAICB)$adj.r.squared, summary(mAICFB)$adj.r.squared,summary(mBICF)$adj.r.squared, summary(mBICB)$adj.r.squared, summary(mBICFB)$r.squared)
+
+print(paste((r2adj.models)))
+```
+
+We noticed that all the 6 models have similar Residuals vs Fitted values, Residuals vs Indices, and the histograms maintain normality (showed in the appendix). However, all the 3 models from BIC, had a bit of high kurtosis.
+
+```{r, echo=FALSE}
+par(mfrow=c(1,3))
+qqnorm(mBICF$residuals, xlab = "Theoritical Residuals Quantiles", ylab="Sample Quantiles", main="BIC Forward")
+qqline(mBICF$residuals, col="red", lwd=2)
+
+qqnorm(mBICB$residuals, xlab = "Theoritical Residuals Quantiles", ylab="Sample Quantiles", main ="BIC Backward")
+qqline(mBICB$residuals, col="red", lwd=2)
+
+qqnorm(mBICFB$residuals, xlab = "Theoritical Residuals Quantiles", ylab="Sample Quantiles", main ="BIC Forward-Backward")
+qqline(mBICFB$residuals, col="red", lwd=2)
+
+```
+However, we will still continue using them, because transformation can become handy later on to fix them, and may be the best model is hiding here [spoiler alert: It is]
+
+
+```{r, echo=FALSE, eval=FALSE}
+par(mfrow=c(2,2))
+# First : 
+
+#Residual plot : vs fitted values
+plot(m2$fitted.values, m2$residuals, xlab="Fitted Values", ylab="Residuals ", main= "Scatter plot: Residuals vs Fitted Values")
+
+#Histogram of Residuals
+hist(m2$residuals, xlab="Residuals", main="Histogram of residuals")
+
+#Residual vs index
+plot (1: nrow(pro) , m2$residuals , xlab = "Index", ylab = "Residuals", main= "Scatter plot: Residuals vs Index")
+
+#QQ plot of Residuals
+qqnorm(m2$residuals, xlab = "Theoritical Residuals Quantiles", ylab="Sample Quantiles")
+qqline(m2$residuals, col="red", lwd=2)
+
+```
+
+
+
+```{r, echo=FALSE, eval=FALSE}
+par(mfrow=c(2,2))
+
+
+#mAICF
+mod_cur = mAICF
+#Residual plot : vs fitted values
+plot(mod_cur$fitted.values, mod_cur$residuals, xlab="Fitted Values", ylab="Residuals ", main= "Scatter plot: Residuals vs Fitted Values")
+
+#Histogram of Residuals
+hist(mod_cur$residuals, xlab="Residuals", main="Histogram of residuals")
+
+#Residual vs index
+plot (1: nrow(pro) , mod_cur$residuals , xlab = "Index", ylab = "Residuals", main= "Scatter plot: Residuals vs Index")
+
+#QQ plot of Residuals
+qqnorm(mod_cur$residuals, xlab = "Theoritical Residuals Quantiles", ylab="Sample Quantiles")
+qqline(mod_cur$residuals, col="red", lwd=2)
+```
+
+
+```{r, echo=FALSE, eval=FALSE}
+par(mfrow=c(2,2))
+#mAICB
+mod_cur = m2
+#Residual plot : vs fitted values
+plot(mod_cur$fitted.values, mod_cur$residuals, xlab="Fitted Values", ylab="Residuals ", main= "Scatter plot: Residuals vs Fitted Values")
+
+#Histogram of Residuals
+hist(mod_cur$residuals, xlab="Residuals", main="Histogram of residuals")
+
+#Residual vs index
+plot (1: nrow(pro) , mod_cur$residuals , xlab = "Index", ylab = "Residuals", main= "Scatter plot: Residuals vs Index")
+
+#QQ plot of Residuals
+qqnorm(mod_cur$residuals, xlab = "Theoritical Residuals Quantiles", ylab="Sample Quantiles")
+qqline(mod_cur$residuals, col="red", lwd=2)
+```
+
+
+```{r, echo=FALSE, eval=FALSE}
+par(mfrow=c(2,2))
+
+
+
+#mAICFB
+mod_cur = mAICFB
+#Residual plot : vs fitted values
+plot(mod_cur$fitted.values, mod_cur$residuals, xlab="Fitted Values", ylab="Residuals ", main= "Scatter plot: Residuals vs Fitted Values")
+
+#Histogram of Residuals
+hist(mod_cur$residuals, xlab="Residuals", main="Histogram of residuals")
+
+#Residual vs index
+plot (1: nrow(pro) , mod_cur$residuals , xlab = "Index", ylab = "Residuals", main= "Scatter plot: Residuals vs Index")
+
+#QQ plot of Residuals
+qqnorm(mod_cur$residuals, xlab = "Theoritical Residuals Quantiles", ylab="Sample Quantiles")
+qqline(mod_cur$residuals, col="red", lwd=2)
+```
+
+
+```{r, echo=FALSE, eval=FALSE}
+par(mfrow=c(2,2))
+
+#mBICF
+mod_cur = mBICF
+#Residual plot : vs fitted values
+plot(mod_cur$fitted.values, mod_cur$residuals, xlab="Fitted Values", ylab="Residuals ", main= "Scatter plot: Residuals vs Fitted Values")
+
+#Histogram of Residuals
+hist(mod_cur$residuals, xlab="Residuals", main="Histogram of residuals")
+
+#Residual vs index
+plot (1: nrow(pro) , mod_cur$residuals , xlab = "Index", ylab = "Residuals", main= "Scatter plot: Residuals vs Index")
+
+#QQ plot of Residuals
+qqnorm(mod_cur$residuals, xlab = "Theoritical Residuals Quantiles", ylab="Sample Quantiles")
+qqline(mod_cur$residuals, col="red", lwd=2)
+```
+
+
+
+```{r, echo=FALSE, eval=FALSE}
+par(mfrow=c(2,2))
+
+#mBICB
+mod_cur = mBICB
+#Residual plot : vs fitted values
+plot(mod_cur$fitted.values, mod_cur$residuals, xlab="Fitted Values", ylab="Residuals ", main= "Scatter plot: Residuals vs Fitted Values")
+
+#Histogram of Residuals
+hist(mod_cur$residuals, xlab="Residuals", main="Histogram of residuals")
+
+#Residual vs index
+plot (1: nrow(pro) , mod_cur$residuals , xlab = "Index", ylab = "Residuals", main= "Scatter plot: Residuals vs Index")
+
+#QQ plot of Residuals
+qqnorm(mod_cur$residuals, xlab = "Theoritical Residuals Quantiles", ylab="Sample Quantiles")
+qqline(mod_cur$residuals, col="red", lwd=2)
+```
+
+
+```{r, echo=FALSE, eval=FALSE}
+par(mfrow=c(2,2))
+
+#mBICFB
+mod_cur = mBICFB
+#Residual plot : vs fitted values
+plot(mod_cur$fitted.values, mod_cur$residuals, xlab="Fitted Values", ylab="Residuals ", main= "Scatter plot: Residuals vs Fitted Values")
+
+#Histogram of Residuals
+hist(mod_cur$residuals, xlab="Residuals", main="Histogram of residuals")
+
+#Residual vs index
+plot (1: nrow(pro) , mod_cur$residuals , xlab = "Index", ylab = "Residuals", main= "Scatter plot: Residuals vs Index")
+
+#QQ plot of Residuals
+qqnorm(mod_cur$residuals, xlab = "Theoritical Residuals Quantiles", ylab="Sample Quantiles")
+qqline(mod_cur$residuals, col="red", lwd=2)
+
+
+```
+
+
+```{r, echo=FALSE, eval=FALSE}
+layout_matrix_1 <- matrix(1:6, ncol = 2)  
+layout(layout_matrix_1)  
+
+qqnorm(mAICF$residuals, xlab = "Theoritical Residuals Quantiles", ylab="Sample Quantiles")
+qqline(mAICF$residuals, col="red", lwd=2)
+
+qqnorm(mAICB$residuals, xlab = "Theoritical Residuals Quantiles", ylab="Sample Quantiles")
+qqline(mAICB$residuals, col="red", lwd=2)
+
+qqnorm(mAICFB$residuals, xlab = "Theoritical Residuals Quantiles", ylab="Sample Quantiles")
+qqline(mAICFB$residuals, col="red", lwd=2)
+
+qqnorm(mBICF$residuals, xlab = "Theoritical Residuals Quantiles", ylab="Sample Quantiles")
+qqline(mBICF$residuals, col="red", lwd=2)
+
+qqnorm(mBICB$residuals, xlab = "Theoritical Residuals Quantiles", ylab="Sample Quantiles")
+qqline(mBICB$residuals, col="red", lwd=2)
+
+qqnorm(mBICFB$residuals, xlab = "Theoritical Residuals Quantiles", ylab="Sample Quantiles")
+qqline(mBICFB$residuals, col="red", lwd=2)
+
+
+```
+```{r, echo=FALSE, eval=TRUE}
+colz1 <- names(mAICF$coefficients)
+colz1 <- colz1[2:length(colz1)]
+M1.ind <- match(colz1, colnames(pro))
+M1.ind <- append(1, M1.ind)
+
+colz2 <- names(mAICB$coefficients)
+colz2 <- colz2[2:length(colz2)]
+M2.ind <- match(colz2, colnames(pro))
+M2.ind <- append(1, M2.ind)
+
+colz3 <- names(mAICFB$coefficients)
+colz3 <- colz3[2:length(colz3)]
+M3.ind <- match(colz3, colnames(pro))
+M3.ind <- append(1, M3.ind)
+
+colz4 <- names(mBICF$coefficients)
+colz4 <- colz4[2:length(colz4)]
+M4.ind <- match(colz4, colnames(pro))
+M4.ind <- append(1, M4.ind)
+
+colz5 <- names(mBICB$coefficients)
+colz5 <- colz5[2:length(colz5)]
+M5.ind <- match(colz5, colnames(pro))
+M5.ind <- append(1, M5.ind)
+
+colz6 <- names(mBICFB$coefficients)
+colz6 <- colz6[2:length(colz6)]
+M6.ind <- match(colz6, colnames(pro))
+M6.ind <- append(1, M6.ind)
+
+```
+```{r, echo=FALSE, eval=TRUE}
+set.seed(20746760)
+N <- nrow(pro)
+trainInd <- sample (1: N , round ( N *0.8) , replace = F )
+trainSet <- pro[ trainInd ,]
+validSet <- pro[ - trainInd ,]
+ M1<- lm(accuracy~., data=trainSet[,M1.ind])
+ M2<- lm(accuracy~., data=trainSet[,M2.ind])
+ M3<- lm(accuracy~., data=trainSet[,M3.ind])
+ M4<- lm(accuracy~., data=trainSet[,M4.ind])
+ M5<- lm(accuracy~., data=trainSet[,M5.ind])
+ M6<- lm(accuracy~., data=trainSet[,M6.ind])
+ pred1 <- predict ( M1 , newdata = validSet )
+ pred2 <- predict ( M2 , newdata = validSet )
+ pred3 <- predict ( M3 , newdata = validSet )
+ pred4 <- predict ( M4 , newdata = validSet )
+ pred5 <- predict ( M5 , newdata = validSet )
+ pred6 <- predict ( M6 , newdata = validSet )
+ R1 <- sqrt ( mean (( validSet$accuracy - pred1 ) ^2) )
+ R2 <- sqrt ( mean (( validSet$accuracy - pred2 ) ^2) )
+ R3 <- sqrt ( mean (( validSet$accuracy - pred3 ) ^2) )
+ R4 <- sqrt ( mean (( validSet$accuracy - pred4 ) ^2) )
+ R5 <- sqrt ( mean (( validSet$accuracy - pred5 ) ^2) )
+ R6 <- sqrt ( mean (( validSet$accuracy - pred6 ) ^2) )
+```
+
+```{r, echo=FALSE, eval=FALSE}
+N<- nrow(pro)
+set.seed(20746760)
+K <- N
+validSetSplits <- sample((1:N)%%K + 1)
+RMSE1 <- c()
+RMSE2 <- c()
+RMSE3 <- c()
+RMSE4 <- c()
+RMSE5 <- c()
+RMSE6 <- c()
+for (k in 1:K) {
+  validSet <- pro[validSetSplits==k,]
+  trainSet <- pro[validSetSplits!=k,]
+
+  M1 <- lm(accuracy~., data=trainSet[,M1.ind])
+  pred1 <- predict(M1, newdata = validSet)
+  RMSE1[k] <- sqrt(mean((validSet$accuracy - pred1)^2))
+
+  M2 <- lm(accuracy~., data=trainSet[,M2.ind])
+  pred2 <- predict(M2, newdata = validSet)
+  RMSE2[k] <- sqrt(mean((validSet$accuracy - pred2)^2))
+
+  M3 <- lm(accuracy~., data=trainSet[,M3.ind])
+  pred3 <- predict(M3, newdata = validSet)
+  RMSE3[k] <- sqrt(mean((validSet$accuracy - pred3)^2))
+
+  M4 <- lm(accuracy~., data=trainSet[,M4.ind])
+  pred4 <- predict(M4, newdata = validSet)
+  RMSE4[k] <- sqrt(mean((validSet$accuracy - pred4)^2))
+
+  M5 <- lm(accuracy~., data=trainSet[,M5.ind])
+  pred5 <- predict(M5, newdata = validSet)
+  RMSE5[k] <- sqrt(mean((validSet$accuracy - pred5)^2))
+
+  M6 <- lm(accuracy~., data=trainSet[,M6.ind])
+  pred6 <- predict(M6, newdata = validSet)
+  RMSE6[k] <- sqrt(mean((validSet$accuracy - pred6)^2))
+
+
+}
+# save(M1, file = "M1.rda")
+# save(M2, file = "M2.rda")
+# save(M3, file = "M3.rda")
+# save(M4, file = "M4.rda")
+# save(M5, file = "M5.rda")
+# save(M6, file = "M6.rda")
+
+
+```
+
+-*Getting my final model* $\newline$
+We will see below in the figure that of the 6 models, the $4^{th}$ model uses the least number of predictors and also has the least difference compared to it's validation set, after being run $k=N$ cross validation among the 6 models. A $8:2$ ratio was maintained between the training and validation set. 
+
+
+```{r, echo=FALSE}
+
+load("M1.rda")
+load("M2.rda")
+load("M3.rda")
+load("M4.rda")
+load("M5.rda")
+load("M6.rda")
+
+set.seed(20746760)
+N <- nrow(pro)
+trainInd <- sample (1: N , round ( N *0.8) , replace = F )
+trainSet <- pro[ trainInd ,]
+validSet <- pro[ - trainInd ,]
+
+valnos <-c(89,91,126,246,256,300)
+valid.MSEs <- c(R4^2,R6^2,R5^2,R1^2,R3^2,R2^2)
+train.MSEs <- c((mean(M4$residuals^2)), (mean(M6$residuals^2)), (mean(M5$residuals^2)),(mean(M1$residuals^2)),(mean(M3$residuals^2)),(mean(M2$residuals^2)))
+
+
+
+plot(train.MSEs, type = "o", xlab = "# of predictors", ylab = "MSEs", col="blue", xaxt="n", ylim = c(0.15, 0.40), main= "MSE vs # of Predictors")
+axis(1, at=1:6, labels=c("89", "91", "126", "246", "256", "300"))
+lines(valid.MSEs, type="o", col="red")
+text(5,                                      
+     0.23,                          
+     "overfitting",                                      
+     pos = 4, srt = 270, cex = 0.8, col = "purple") 
+abline(v=5, lty=2)
+legend("bottomleft", legend=c("Validation", "Training"),
+       col=c("red", "blue"), lty=1:1, cex=0.8)
+
+#barplot of RMSE differences
+valid.RMSEs <- lapply(valid.MSEs, sqrt)
+train.RMSEs <- lapply(train.MSEs, sqrt)
+
+differences <- unlist(valid.RMSEs) - unlist(train.RMSEs)
+barplot(differences, xlab="Diff of Valid/Train Model'S'", ylab = "Value of difference",
+        main="Difference in RMSE Values in models", names.arg=c("M4", "M6", "M5", "M1", "M3", "M2"))
+
+```
+Among all the other models, the model 4 (BIC Forward) had the least difference as we can see in the barplot. In fact, choosing model 4 was wise since, if we follow the segmented line plots of MSE vs # of Predictors, we will notice that model 4 does not have much of an issue with overfitting. 
+
+Also, having less number of predictors mean it is easier to interpret, therefore Model 4 was chosen.
+
+```{r, echo= FALSE, eval=FALSE}
+pro.test <- read.csv("protein-test.csv")
+test.pred <-predict(M4, newdata = pro.test)
+writeLines(as.character(test.pred), "mypreds.txt")
+```
+-*Transformation:* $\newline$
+
+We see the the residuals vs fitted values does not really have a distribution which follows the MLR assumption. However, the QQ plot seems fine. So, we will go with the Box-Cox transformation and see that the new residuals vs fitted values distribution matches more like the MLR assumption (and then again look at QQ plot to see if it was made bettter). So we can say it helped stabilizing the non constant variance. 
+
+Along with that, the new QQ plot has a better matching with the MLR assumption by having all the plots lined with the line $y=x$
+
+
+```{r, echo=FALSE, eval=FALSE}
+
+library(MASS)
+L4 <-lm(accuracy~ ., data = trainSet[,M4.ind])
+bc.L4 <- boxcox (M4)
+lambda <- bc.L4$x[which.max(bc.L4$y)]
+
+```
+```{r, echo=FALSE}
+
+par(mfrow=c(1,2))
+
+#mBICF
+mod_cur = M4
+#Residual plot : vs fitted values
+plot(mod_cur$fitted.values, mod_cur$residuals, xlab="Fitted Values", ylab="Residuals ", main= "Old Scatter plot: Res vs Fit")
+
+
+#QQ plot of Residuals
+qqnorm(mod_cur$residuals, xlab = "Theoritical Residuals Quantiles", ylab="Sample Quantiles", main = "Old QQ plot")
+qqline(mod_cur$residuals, col="red", lwd=2)
+
+
+par(mfrow=c(1,2))
+
+lambda <-  1.919192
+L4 <-  lm ((accuracy^lambda -1) / lambda ~. ,trainSet[,M4.ind] )
+
+mod_cur = L4
+#Residual plot : vs fitted values
+plot(mod_cur$fitted.values, mod_cur$residuals, xlab="Fitted Values", ylab="Residuals ", main= "New Scatter plot: Res vs Fit")
+
+#QQ plot of Residuals
+qqnorm(mod_cur$residuals, xlab = "Theoritical Residuals Quantiles", ylab="Sample Quantiles", main = "New QQ plot")
+qqline(mod_cur$residuals, col="red", lwd=2)
+
+```
+
+$\newline$
+**Results and Discussion:** $\newline$
+- While obtaining my final model, I started looking for outliers, however, I reached the conclusion that trying to remove some of the outliers after conducting a studentized residual test, the RMSE value only increases. RMSPE for model 4 before removing them was $0.5448438$, while after removing them it increased to $0.5838417$
+
+- There were 6 models tested by my selection procedure. 3 from AIC (Forward, Backward, and Both) and 3 from BIC (Forward, Backward and Both)
+
+- The figures on page 4 and 5 describe the differences in RMSE and MSE between validation and trainin sets.
+
+- There are 89 variables in my model, some are positively, while some are negatively related to the respone variable (accuracy)
+
+- All of them are uncorrelated variables, contributing to the prediction of the response variable.
+
+- aliph1HC_scArgN_long = 0.563553314. With one unit increase in this variable *aliph1HC_scArgN_long*, the response variable increases by 0.563553314
+- scArgN_bbO_medlong = 0.437025430. With one unit increase in this variable *scArgN_bbO_medlong*, the response variable increases by 0.437025430
+- bbCA_bbO_vshor = -0.395812423 . With one unit increase in this variable *bbCA_bbO_vshor*, the response variable decreases by 0.395812423
+
+```{r, echo= FALSE, eval=FALSE}
+#All the coefficient names for M4
+print(paste(names(M4$coefficients)))
+```
+
+$\newline$ 
+Since, the differnce between the validation set and the training set for my model 4 was really small, and despite breaking some rules (since prediction was our main goal), out model fit the data good(except for the QQ plot which is still not bad) If we check page 6, the transformation has made the MLR assumption well maintained.
+The regression assumptions of normality, constant variance and independence among error terms were all maintained(check appendix)
+
+I would have expected the MSPE to be $0.5448438$ and I am confident about it since I have cross validated it $N$ times, got rid of multicollinearity, made sure no overfitting(so no noise) remains, and checked for outliers. Hence, I could confidently say the MSPE should be around what I currently have
+
+As seen previously, aliph1HC_scArgN_long = 0.563553314 makes a huge contribution to the prediction of the response variable. However, what I particularly found interesting was that the angles variable was not in my best mode (Model 4). The reason could be behind the fact that some variable distances can account for the ratio of the angle contributiong to the response variable(accuracy) [for instance, some distance A and B among atoms can form a ratio of the angle collectively.]
+
+
+
+
+
+```{r, echo=FALSE}
+#effect of observations
+
+
+# 
+# plot (L4$fitted.values , studres(L4 ) , xlab =" Fitted values ", ylab ="
+# Studentized residuals ")
+# abline ( h = c (3 , -3) , col = "red ", lty =2)
+stud.outliers <- which (abs ( studres ( L4) ) > 3) #possible outliers
+
+
+#training L4 without the outliers
+
+L4 <-lm(accuracy~ ., data = trainSet[-stud.outliers,M4.ind])
+
+pred.L4 <- predict(L4, newdata = validSet)
+RMSE.L4 <- sqrt(mean((validSet$accuracy - pred.L4)^2))
+
+#since RMSE.L4 > RMSPE4, we keep M4 as the best model. a
+
+```
